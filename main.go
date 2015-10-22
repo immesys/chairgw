@@ -136,6 +136,7 @@ func (ses *Session) Process(serial uint16, ra *net.UDPAddr, msg []byte) {
 		for i := 0; i < 16; i++ {
 			r := msg[2+i*4 : 2+(i+1)*4]
 			typ := r[0]
+			fmt.Printf("RECORD %x %x %x %x\n", r[0], r[1], r[2], r[3])
 			switch {
 			case (typ & 0xf0) == 0xf0: //BLANK
 				fmt.Printf("Skipping blank record: %x %x %x %x\n", r[0], r[1], r[2], r[3])
