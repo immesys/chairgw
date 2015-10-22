@@ -63,7 +63,6 @@ func gilesInsert(uuid string, path string, unit string, timestamp uint64, value 
 	if err != nil {
 		panic(err)
 	}
-	fmt.Printf("Giles insert: '%s'\n", rep)
 }
 func (ses *Session) GetTime() uint64 {
 	return (uint64(ses.CurrentTime) + 1420070400) * 1000
