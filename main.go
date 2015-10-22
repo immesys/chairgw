@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"code.google.com/p/go-uuid/uuid"
 )
@@ -20,20 +21,57 @@ type Session struct {
 }
 
 var giles = "http://127.0.0.1:8079/api/query"
+var gilesi = "http://127.0.0.1:8079/add/nokey"
 var seslock sync.Mutex
 var sessions map[uint16]*Session
-var streams []string = []string{"humidity", "temperature", "seat_fan", "seat_heat", "back_fan", "back_heat", "battery", "generation"}
+var streams []string = []string{"humidity", "temperature", "occupancy", "seat_fan", "seat_heat", "back_fan", "back_heat", "battery", "wall_in_remote_time", "remote_in_wall_time"}
 var sock *net.UDPConn
 var socklock sync.Mutex
+
+var smap_template = `
+{
+	"%s": {
+		"Metadata": {
+			"SourceName": "PECS"
+		},
+		"Properties": {
+			"Timezone": "America/Los_Angeles",
+			"ReadingType":"double",
+			"Unitofmeasure":"%s",
+			"UnitofTime":"ms",
+			"StreamType":"numeric"
+		},
+		"Readings": [
+			[%d, %f]
+		],
+		"uuid": "%s"
+	}
+}
+`
 
 type UUReply struct {
 	Uuid string `json:"uuid"`
 }
 
+func gilesInsert(uuid string, path string, unit string, timestamp uint64, value float64) {
+	in := fmt.Sprintf(smap_template, path, unit, timestamp, value, uuid)
+	resp, err := http.Post(gilesi, "text/plain", strings.NewReader(in))
+	if err != nil {
+		panic(err)
+	}
+	rep, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("Giles insert: '%s'\n", rep)
+}
+func (ses *Session) GetTime() uint64 {
+	return (uint64(ses.CurrentTime) + 1420070400) * 1000
+}
 func createSession(serial uint16) *Session {
 	rv := &Session{HaveTime: false, ReadPtr: -1, UuidMap: make(map[string]string)}
 	for _, e := range streams {
-		qry := fmt.Sprintf("select uuid where Path like pecs/%04x/%s", serial, e)
+		qry := fmt.Sprintf("select uuid where Path like %04x/%s", serial, e)
 		resp, err := http.Post(giles, "text/plain", strings.NewReader(qry))
 		if err != nil {
 			panic(err)
@@ -49,12 +87,20 @@ func createSession(serial uint16) *Session {
 		}
 		if len(uu) == 0 {
 			//No existing stream, make it up
-			fmt.Printf("No stream found for pecs/%04x/%s, creating new UUID\n", serial, e)
+			fmt.Printf("No stream found for %04x/%s, creating new UUID\n", serial, e)
 			rv.UuidMap[e] = uuid.NewRandom().String()
 		} else {
 			rv.UuidMap[e] = uu[0]["uuid"]
 		}
 	}
+	go func() {
+		for {
+			time.Sleep(100 * time.Millisecond)
+			if rv.HaveTime {
+				gilesInsert(rv.UuidMap["remote_in_wall_time"], fmt.Sprintf("%04x/remote_in_wall_time", serial), "Seconds", uint64(time.Now().UnixNano()/1000000), float64(rv.GetTime()))
+			}
+		}
+	}()
 	return rv
 }
 
@@ -86,7 +132,78 @@ func (ses *Session) Process(serial uint16, ra *net.UDPAddr, msg []byte) {
 		}
 	}
 	if process {
-		//Magic
+		for i := 0; i < 16; i++ {
+			r := msg[2+i*4 : 2+(i+1)*4]
+			typ := r[0]
+			switch {
+			case (typ & 0xf0) == 0xf0: //BLANK
+				fmt.Printf("Skipping blank record")
+				continue
+			case (typ & 0xf0) == 0xe0: //TIMESTAMP
+				ts := (uint32(r[0]) & 0xf << 24) | (uint32(r[1]) << 16) | (uint32(r[2]) << 8) | uint32(r[3])
+				ses.CurrentTime = ts
+				ses.HaveTime = true
+				gilesInsert(ses.UuidMap["wall_in_remote_time"], fmt.Sprintf("%04x/wall_in_remote_time", serial), "Seconds", ses.GetTime(), float64(time.Now().UnixNano()/1000000))
+			case (typ & 0xc0) == 0: //Temp/Hum/Occ
+				if !ses.HaveTime {
+					fmt.Printf("Dropping THO record, no absolute time")
+					continue
+				}
+				rts := uint32(r[0] >> 3 & 7)
+				occ := r[0]>>2&1 > 0
+				occf := float64(0.0)
+				if occ {
+					occf = 1.0
+				}
+				hum := int(r[0]&3)<<10 + int(r[1])<<2 + int(r[2]>>6)
+				tmp := int(r[2]&0x3f)<<8 + int(r[3])
+				ses.CurrentTime += rts
+				gilesInsert(ses.UuidMap["wall_in_remote_time"], fmt.Sprintf("%04x/wall_in_remote_time", serial), "Seconds", ses.GetTime(), float64(time.Now().UnixNano()/1000000))
+				gilesInsert(ses.UuidMap["occupancy"], fmt.Sprintf("%04x/occupancy", serial), "Binary", ses.GetTime(), occf)
+				fmt.Printf("Inserting occupancy value %f\n", occf)
+				if hum != 0 {
+					real_hum := -6 + 125*float64(hum<<4)/65536
+					fmt.Printf("Inserting humidity value %f\n", real_hum)
+					gilesInsert(ses.UuidMap["humidity"], fmt.Sprintf("%04x/humidity", serial), "%RH", ses.GetTime(), real_hum)
+				} else {
+					fmt.Println("Bad humidity record")
+				}
+				if tmp != 0 {
+					real_tmp := (-46.85+175.72*float64(tmp<<2)/65536)*1.8 + 32
+					fmt.Printf("Inserting temperature value %f\n", real_tmp)
+					gilesInsert(ses.UuidMap["temperature"], fmt.Sprintf("%04x/temperature", serial), "Fahrenheit", ses.GetTime(), real_tmp)
+				} else {
+					fmt.Println("Bad temperature record")
+				}
+			case (typ & 0xc0) == 0x40: //Settings
+				if !ses.HaveTime {
+					fmt.Printf("Dropping SET record, no absolute time")
+					continue
+				}
+				rts := uint32(r[0] >> 4 & 3)
+				seat_heat := (r[0] << 3) + (r[1] >> 5)
+				back_heat := (r[1] & 0x1f) + (r[2] >> 6)
+				seat_fan := (r[2] << 1 & 0x3f) + r[3]>>7
+				back_fan := r[3] & 0x7f
+				ses.CurrentTime += rts
+				gilesInsert(ses.UuidMap["wall_in_remote_time"], fmt.Sprintf("%04x/wall_in_remote_time", serial), "Seconds", ses.GetTime(), float64(time.Now().UnixNano()/1000000))
+				gilesInsert(ses.UuidMap["seat_heat"], fmt.Sprintf("%04x/seat_heat", serial), "%", ses.GetTime(), float64(seat_heat))
+				gilesInsert(ses.UuidMap["back_heat"], fmt.Sprintf("%04x/back_heat", serial), "%", ses.GetTime(), float64(back_heat))
+				gilesInsert(ses.UuidMap["seat_fan"], fmt.Sprintf("%04x/seat_fan", serial), "%", ses.GetTime(), float64(seat_fan))
+				gilesInsert(ses.UuidMap["back_fan"], fmt.Sprintf("%04x/back_fan", serial), "%", ses.GetTime(), float64(back_fan))
+			case (typ & 0xf0) == 0xc0: //Battery voltage
+				if !ses.HaveTime {
+					fmt.Printf("Dropping BAT record, no absolute time")
+					continue
+				}
+				rts := uint32(r[0]&0xf)<<8 + uint32(r[1])
+				vol := uint16(r[2])<<8 + uint16(r[3])
+				volf := (float64(vol) * 2.048) * (10000. / (10000. + 51000.))
+				ses.CurrentTime += rts
+				gilesInsert(ses.UuidMap["wall_in_remote_time"], fmt.Sprintf("%04x/wall_in_remote_time", serial), "Seconds", ses.GetTime(), float64(time.Now().UnixNano()/1000000))
+				gilesInsert(ses.UuidMap["battery"], fmt.Sprintf("%04x/battery", serial), "Voltage", ses.GetTime(), volf)
+			}
+		}
 	}
 	socklock.Lock()
 	_, err := sock.WriteToUDP([]byte{uint8(read_ptr), uint8(read_ptr >> 8)}, ra)
