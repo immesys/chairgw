@@ -190,7 +190,7 @@ func (ses *Session) Process(serial uint16, ra *net.UDPAddr, msg []byte) {
 				seat_fan := (r[2] << 1 & 0x3f) + r[3]>>7
 				back_fan := r[3] & 0x7f
 				ses.CurrentTime += rts
-				fmt.Printf(">>> Got SET\n")
+				fmt.Printf(">>> Got SET rts was %d\n", rts)
 				gilesInsert(ses.UuidMap["wall_in_remote_time"], fmt.Sprintf("/%04x/wall_in_remote_time", serial), "Wall seconds", ses.GetTime(), float64(time.Now().UnixNano()/1000000)/1000.)
 				gilesInsert(ses.UuidMap["seat_heat"], fmt.Sprintf("/%04x/seat_heat", serial), "%", ses.GetTime(), float64(seat_heat))
 				gilesInsert(ses.UuidMap["back_heat"], fmt.Sprintf("/%04x/back_heat", serial), "%", ses.GetTime(), float64(back_heat))
