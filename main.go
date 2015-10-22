@@ -59,7 +59,7 @@ func gilesInsert(uuid string, path string, unit string, timestamp uint64, value 
 	if err != nil {
 		panic(err)
 	}
-	rep, err := ioutil.ReadAll(resp.Body)
+	_, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		panic(err)
 	}
