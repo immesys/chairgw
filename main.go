@@ -138,7 +138,7 @@ func (ses *Session) Process(serial uint16, ra *net.UDPAddr, msg []byte) {
 			typ := r[0]
 			switch {
 			case (typ & 0xf0) == 0xf0: //BLANK
-				fmt.Printf("Skipping blank record")
+				fmt.Printf("Skipping blank record: %x %x %x %x\n", r[0], r[1], r[2], r[3])
 				continue
 			case (typ & 0xf0) == 0xe0: //TIMESTAMP
 				ts := (uint32(r[0]) & 0xf << 24) | (uint32(r[1]) << 16) | (uint32(r[2]) << 8) | uint32(r[3])
