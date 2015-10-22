@@ -142,6 +142,7 @@ func (ses *Session) Process(serial uint16, ra *net.UDPAddr, msg []byte) {
 				ts := (uint32(r[0]) & 0xf << 24) | (uint32(r[1]) << 16) | (uint32(r[2]) << 8) | uint32(r[3])
 				ses.CurrentTime = ts
 				ses.HaveTime = true
+				fmt.Printf(">>> Got ABS TS\n")
 				gilesInsert(ses.UuidMap["wall_in_remote_time"], fmt.Sprintf("%04x/wall_in_remote_time", serial), "Seconds", ses.GetTime(), float64(time.Now().UnixNano()/1000000))
 			case (typ & 0xc0) == 0: //Temp/Hum/Occ
 				if !ses.HaveTime {
@@ -157,6 +158,7 @@ func (ses *Session) Process(serial uint16, ra *net.UDPAddr, msg []byte) {
 				hum := int(r[0]&3)<<10 + int(r[1])<<2 + int(r[2]>>6)
 				tmp := int(r[2]&0x3f)<<8 + int(r[3])
 				ses.CurrentTime += rts
+				fmt.Printf(">>> Got THO\n")
 				gilesInsert(ses.UuidMap["wall_in_remote_time"], fmt.Sprintf("%04x/wall_in_remote_time", serial), "Seconds", ses.GetTime(), float64(time.Now().UnixNano()/1000000))
 				gilesInsert(ses.UuidMap["occupancy"], fmt.Sprintf("%04x/occupancy", serial), "Binary", ses.GetTime(), occf)
 				fmt.Printf("Inserting occupancy value %f\n", occf)
@@ -185,6 +187,7 @@ func (ses *Session) Process(serial uint16, ra *net.UDPAddr, msg []byte) {
 				seat_fan := (r[2] << 1 & 0x3f) + r[3]>>7
 				back_fan := r[3] & 0x7f
 				ses.CurrentTime += rts
+				fmt.Printf(">>> Got SET\n")
 				gilesInsert(ses.UuidMap["wall_in_remote_time"], fmt.Sprintf("%04x/wall_in_remote_time", serial), "Seconds", ses.GetTime(), float64(time.Now().UnixNano()/1000000))
 				gilesInsert(ses.UuidMap["seat_heat"], fmt.Sprintf("%04x/seat_heat", serial), "%", ses.GetTime(), float64(seat_heat))
 				gilesInsert(ses.UuidMap["back_heat"], fmt.Sprintf("%04x/back_heat", serial), "%", ses.GetTime(), float64(back_heat))
@@ -199,6 +202,7 @@ func (ses *Session) Process(serial uint16, ra *net.UDPAddr, msg []byte) {
 				vol := uint16(r[2])<<8 + uint16(r[3])
 				volf := (float64(vol) * 2.048) * (10000. / (10000. + 51000.))
 				ses.CurrentTime += rts
+				fmt.Printf(">>> Got BAT\n")
 				gilesInsert(ses.UuidMap["wall_in_remote_time"], fmt.Sprintf("%04x/wall_in_remote_time", serial), "Seconds", ses.GetTime(), float64(time.Now().UnixNano()/1000000))
 				gilesInsert(ses.UuidMap["battery"], fmt.Sprintf("%04x/battery", serial), "Voltage", ses.GetTime(), volf)
 			}
