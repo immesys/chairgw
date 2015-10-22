@@ -160,7 +160,7 @@ func (ses *Session) Process(serial uint16, ra *net.UDPAddr, msg []byte) {
 				hum := int(r[0]&3)<<10 + int(r[1])<<2 + int(r[2]>>6)
 				tmp := int(r[2]&0x3f)<<8 + int(r[3])
 				ses.CurrentTime += rts
-				fmt.Printf(">>> Got THO\n")
+				fmt.Printf(">>> Got THO, rts was %d\n", rts)
 				gilesInsert(ses.UuidMap["wall_in_remote_time"], fmt.Sprintf("/%04x/wall_in_remote_time", serial), "Wall seconds", ses.GetTime(), float64(time.Now().UnixNano()/1000000)/1000.)
 				gilesInsert(ses.UuidMap["occupancy"], fmt.Sprintf("/%04x/occupancy", serial), "Binary", ses.GetTime(), occf)
 				fmt.Printf("Inserting occupancy value %f\n", occf)
