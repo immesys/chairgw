@@ -148,7 +148,7 @@ func (ses *Session) Process(serial uint16, ra *net.UDPAddr, msg []byte) {
 				gilesInsert(ses.UuidMap["wall_in_remote_time"], fmt.Sprintf("/%04x/wall_in_remote_time", serial), "Wall seconds", ses.GetTime(), float64(time.Now().UnixNano()/1000000)/1000.)
 			case (typ & 0xc0) == 0: //Temp/Hum/Occ
 				if !ses.HaveTime {
-					fmt.Printf("Dropping THO record, no absolute time")
+					fmt.Printf("Dropping THO record, no absolute time\n")
 					continue
 				}
 				rts := uint32(r[0] >> 3 & 7)
@@ -180,7 +180,7 @@ func (ses *Session) Process(serial uint16, ra *net.UDPAddr, msg []byte) {
 				}
 			case (typ & 0xc0) == 0x40: //Settings
 				if !ses.HaveTime {
-					fmt.Printf("Dropping SET record, no absolute time")
+					fmt.Printf("Dropping SET record, no absolute time\n")
 					continue
 				}
 				rts := uint32(r[0] >> 4 & 3)
@@ -197,7 +197,7 @@ func (ses *Session) Process(serial uint16, ra *net.UDPAddr, msg []byte) {
 				gilesInsert(ses.UuidMap["back_fan"], fmt.Sprintf("/%04x/back_fan", serial), "%", ses.GetTime(), float64(back_fan))
 			case (typ & 0xf0) == 0xc0: //Battery voltage
 				if !ses.HaveTime {
-					fmt.Printf("Dropping BAT record, no absolute time")
+					fmt.Printf("Dropping BAT record, no absolute time\n")
 					continue
 				}
 				rts := uint32(r[0]&0xf)<<8 + uint32(r[1])
@@ -207,6 +207,9 @@ func (ses *Session) Process(serial uint16, ra *net.UDPAddr, msg []byte) {
 				fmt.Printf(">>> Got BAT\n")
 				gilesInsert(ses.UuidMap["wall_in_remote_time"], fmt.Sprintf("/%04x/wall_in_remote_time", serial), "Wall seconds", ses.GetTime(), float64(time.Now().UnixNano()/1000000)/1000.)
 				gilesInsert(ses.UuidMap["battery"], fmt.Sprintf("/%04x/battery", serial), "Voltage", ses.GetTime(), volf)
+
+			default:
+				fmt.Printf("WHAT KIND OF RECORD IS THIS?? %x %x %x %x\n", r[0], r[1], r[2], r[3])
 			}
 		}
 	}
