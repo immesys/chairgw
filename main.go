@@ -136,7 +136,6 @@ func (ses *Session) Process(serial uint16, ra *net.UDPAddr, msg []byte) {
 		for i := 0; i < 16; i++ {
 			r := msg[2+i*4 : 2+(i+1)*4]
 			typ := r[0]
-			fmt.Printf("RECORD %x %x %x %x\n", r[0], r[1], r[2], r[3])
 			switch {
 			case (typ & 0xf0) == 0xf0: //BLANK
 				fmt.Printf("Skipping blank record: %x %x %x %x\n", r[0], r[1], r[2], r[3])
@@ -164,17 +163,17 @@ func (ses *Session) Process(serial uint16, ra *net.UDPAddr, msg []byte) {
 				fmt.Printf(">>> Got THO, rts was %d\n", rts)
 				gilesInsert(ses.UuidMap["wall_in_remote_time"], fmt.Sprintf("/%04x/wall_in_remote_time", serial), "Wall seconds", ses.GetTime(), float64(time.Now().UnixNano()/1000000)/1000.)
 				gilesInsert(ses.UuidMap["occupancy"], fmt.Sprintf("/%04x/occupancy", serial), "Binary", ses.GetTime(), occf)
-				fmt.Printf("Inserting occupancy value %f\n", occf)
+				//fmt.Printf("Inserting occupancy value %f\n", occf)
 				if hum != 0 {
 					real_hum := -6 + 125*float64(hum<<4)/65536
-					fmt.Printf("Inserting humidity value %f\n", real_hum)
+					//fmt.Printf("Inserting humidity value %f\n", real_hum)
 					gilesInsert(ses.UuidMap["humidity"], fmt.Sprintf("/%04x/humidity", serial), "%RH", ses.GetTime(), real_hum)
 				} else {
 					fmt.Println("Bad humidity record")
 				}
 				if tmp != 0 {
 					real_tmp := (-46.85+175.72*float64(tmp<<2)/65536)*1.8 + 32
-					fmt.Printf("Inserting temperature value %f\n", real_tmp)
+					//fmt.Printf("Inserting temperature value %f\n", real_tmp)
 					gilesInsert(ses.UuidMap["temperature"], fmt.Sprintf("/%04x/temperature", serial), "Fahrenheit", ses.GetTime(), real_tmp)
 				} else {
 					fmt.Println("Bad temperature record")
