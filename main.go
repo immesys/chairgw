@@ -65,8 +65,8 @@ func gilesInsert(uuid string, path string, unit string, timestamp uint64, value 
 	}
 }
 func (ses *Session) GetTime() uint64 {
-	s := uint64(ses.CurrentTime) + 1420070400
-	fmt.Printf("Remote time: %v\n", time.Unix(int64(s), 0))
+	//s := uint64(ses.CurrentTime) + 1420070400
+	//fmt.Printf("Remote time: %v\n", time.Unix(int64(s), 0))
 	return (uint64(ses.CurrentTime) + 1420070400) * 1000
 }
 func createSession(serial uint16) *Session {
