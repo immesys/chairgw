@@ -71,7 +71,7 @@ func (ses *Session) GetTime() uint64 {
 func createSession(serial uint16) *Session {
 	rv := &Session{HaveTime: false, ReadPtr: -1, UuidMap: make(map[string]string)}
 	for _, e := range streams {
-		qry := fmt.Sprintf("select uuid where Path like %04x/%s", serial, e)
+		qry := fmt.Sprintf("select uuid where Path like '%04x/%s'", serial, e)
 		resp, err := http.Post(giles, "text/plain", strings.NewReader(qry))
 		if err != nil {
 			panic(err)
