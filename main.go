@@ -37,7 +37,7 @@ var smap_template = `
 		"Properties": {
 			"Timezone": "America/Los_Angeles",
 			"ReadingType":"double",
-			"Unitofmeasure":"%s",
+			"UnitofMeasure":"%s",
 			"UnitofTime":"ms",
 			"StreamType":"numeric"
 		},
@@ -70,7 +70,7 @@ func (ses *Session) GetTime() uint64 {
 func createSession(serial uint16) *Session {
 	rv := &Session{HaveTime: false, ReadPtr: -1, UuidMap: make(map[string]string)}
 	for _, e := range streams {
-		qry := fmt.Sprintf("select uuid where Path like '%04x/%s'", serial, e)
+		qry := fmt.Sprintf("select uuid where Path like '/%04x/%s'", serial, e)
 		resp, err := http.Post(giles, "text/plain", strings.NewReader(qry))
 		if err != nil {
 			panic(err)
@@ -96,7 +96,7 @@ func createSession(serial uint16) *Session {
 		for {
 			time.Sleep(100 * time.Millisecond)
 			if rv.HaveTime {
-				gilesInsert(rv.UuidMap["remote_in_wall_time"], fmt.Sprintf("%04x/remote_in_wall_time", serial), "Seconds", uint64(time.Now().UnixNano()/1000000), float64(rv.GetTime()))
+				gilesInsert(rv.UuidMap["remote_in_wall_time"], fmt.Sprintf("/%04x/remote_in_wall_time", serial), "Seconds", uint64(time.Now().UnixNano()/1000000), float64(rv.GetTime()))
 			}
 		}
 	}()
@@ -143,7 +143,7 @@ func (ses *Session) Process(serial uint16, ra *net.UDPAddr, msg []byte) {
 				ses.CurrentTime = ts
 				ses.HaveTime = true
 				fmt.Printf(">>> Got ABS TS\n")
-				gilesInsert(ses.UuidMap["wall_in_remote_time"], fmt.Sprintf("%04x/wall_in_remote_time", serial), "Seconds", ses.GetTime(), float64(time.Now().UnixNano()/1000000))
+				gilesInsert(ses.UuidMap["wall_in_remote_time"], fmt.Sprintf("/%04x/wall_in_remote_time", serial), "Seconds", ses.GetTime(), float64(time.Now().UnixNano()/1000000))
 			case (typ & 0xc0) == 0: //Temp/Hum/Occ
 				if !ses.HaveTime {
 					fmt.Printf("Dropping THO record, no absolute time")
@@ -159,20 +159,20 @@ func (ses *Session) Process(serial uint16, ra *net.UDPAddr, msg []byte) {
 				tmp := int(r[2]&0x3f)<<8 + int(r[3])
 				ses.CurrentTime += rts
 				fmt.Printf(">>> Got THO\n")
-				gilesInsert(ses.UuidMap["wall_in_remote_time"], fmt.Sprintf("%04x/wall_in_remote_time", serial), "Seconds", ses.GetTime(), float64(time.Now().UnixNano()/1000000))
-				gilesInsert(ses.UuidMap["occupancy"], fmt.Sprintf("%04x/occupancy", serial), "Binary", ses.GetTime(), occf)
+				gilesInsert(ses.UuidMap["wall_in_remote_time"], fmt.Sprintf("/%04x/wall_in_remote_time", serial), "Seconds", ses.GetTime(), float64(time.Now().UnixNano()/1000000))
+				gilesInsert(ses.UuidMap["occupancy"], fmt.Sprintf("/%04x/occupancy", serial), "Binary", ses.GetTime(), occf)
 				fmt.Printf("Inserting occupancy value %f\n", occf)
 				if hum != 0 {
 					real_hum := -6 + 125*float64(hum<<4)/65536
 					fmt.Printf("Inserting humidity value %f\n", real_hum)
-					gilesInsert(ses.UuidMap["humidity"], fmt.Sprintf("%04x/humidity", serial), "%RH", ses.GetTime(), real_hum)
+					gilesInsert(ses.UuidMap["humidity"], fmt.Sprintf("/%04x/humidity", serial), "%RH", ses.GetTime(), real_hum)
 				} else {
 					fmt.Println("Bad humidity record")
 				}
 				if tmp != 0 {
 					real_tmp := (-46.85+175.72*float64(tmp<<2)/65536)*1.8 + 32
 					fmt.Printf("Inserting temperature value %f\n", real_tmp)
-					gilesInsert(ses.UuidMap["temperature"], fmt.Sprintf("%04x/temperature", serial), "Fahrenheit", ses.GetTime(), real_tmp)
+					gilesInsert(ses.UuidMap["temperature"], fmt.Sprintf("/%04x/temperature", serial), "Fahrenheit", ses.GetTime(), real_tmp)
 				} else {
 					fmt.Println("Bad temperature record")
 				}
@@ -188,11 +188,11 @@ func (ses *Session) Process(serial uint16, ra *net.UDPAddr, msg []byte) {
 				back_fan := r[3] & 0x7f
 				ses.CurrentTime += rts
 				fmt.Printf(">>> Got SET\n")
-				gilesInsert(ses.UuidMap["wall_in_remote_time"], fmt.Sprintf("%04x/wall_in_remote_time", serial), "Seconds", ses.GetTime(), float64(time.Now().UnixNano()/1000000))
-				gilesInsert(ses.UuidMap["seat_heat"], fmt.Sprintf("%04x/seat_heat", serial), "%", ses.GetTime(), float64(seat_heat))
-				gilesInsert(ses.UuidMap["back_heat"], fmt.Sprintf("%04x/back_heat", serial), "%", ses.GetTime(), float64(back_heat))
-				gilesInsert(ses.UuidMap["seat_fan"], fmt.Sprintf("%04x/seat_fan", serial), "%", ses.GetTime(), float64(seat_fan))
-				gilesInsert(ses.UuidMap["back_fan"], fmt.Sprintf("%04x/back_fan", serial), "%", ses.GetTime(), float64(back_fan))
+				gilesInsert(ses.UuidMap["wall_in_remote_time"], fmt.Sprintf("/%04x/wall_in_remote_time", serial), "Seconds", ses.GetTime(), float64(time.Now().UnixNano()/1000000))
+				gilesInsert(ses.UuidMap["seat_heat"], fmt.Sprintf("/%04x/seat_heat", serial), "%", ses.GetTime(), float64(seat_heat))
+				gilesInsert(ses.UuidMap["back_heat"], fmt.Sprintf("/%04x/back_heat", serial), "%", ses.GetTime(), float64(back_heat))
+				gilesInsert(ses.UuidMap["seat_fan"], fmt.Sprintf("/%04x/seat_fan", serial), "%", ses.GetTime(), float64(seat_fan))
+				gilesInsert(ses.UuidMap["back_fan"], fmt.Sprintf("/%04x/back_fan", serial), "%", ses.GetTime(), float64(back_fan))
 			case (typ & 0xf0) == 0xc0: //Battery voltage
 				if !ses.HaveTime {
 					fmt.Printf("Dropping BAT record, no absolute time")
@@ -203,8 +203,8 @@ func (ses *Session) Process(serial uint16, ra *net.UDPAddr, msg []byte) {
 				volf := (float64(vol) * 2.048) * (10000. / (10000. + 51000.))
 				ses.CurrentTime += rts
 				fmt.Printf(">>> Got BAT\n")
-				gilesInsert(ses.UuidMap["wall_in_remote_time"], fmt.Sprintf("%04x/wall_in_remote_time", serial), "Seconds", ses.GetTime(), float64(time.Now().UnixNano()/1000000))
-				gilesInsert(ses.UuidMap["battery"], fmt.Sprintf("%04x/battery", serial), "Voltage", ses.GetTime(), volf)
+				gilesInsert(ses.UuidMap["wall_in_remote_time"], fmt.Sprintf("/%04x/wall_in_remote_time", serial), "Seconds", ses.GetTime(), float64(time.Now().UnixNano()/1000000))
+				gilesInsert(ses.UuidMap["battery"], fmt.Sprintf("/%04x/battery", serial), "Voltage", ses.GetTime(), volf)
 			}
 		}
 	}
