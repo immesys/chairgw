@@ -218,7 +218,7 @@ func (ses *Session) Process(serial uint16, ra *net.UDPAddr, msg []byte) {
 		}
 	}
 	socklock.Lock()
-	_, err := sock.WriteToUDP([]byte{uint8(read_ptr), uint8(read_ptr >> 8)}, ra)
+	_, err := sock.WriteToUDP([]byte{uint8(read_ptr), uint8(read_ptr >> 8), uint8(read_ptr >> 16)}, ra)
 	if err != nil {
 		panic(err)
 	}
