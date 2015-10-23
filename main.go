@@ -204,7 +204,7 @@ func (ses *Session) Process(serial uint16, ra *net.UDPAddr, msg []byte) {
 				rts := uint32(r[0]&0xf)<<8 + uint32(r[1])
 				vol := int16(uint16(r[2])<<8 + uint16(r[3]))
 
-				volf := (float64(vol) / 32768 * 2.048) * (10000. / (10000. + 51000.))
+				volf := (float64(vol) / 32768 * 2.048) / (10000. / (10000. + 68000.))
 				ses.CurrentTime += rts
 				fmt.Printf(">>> Got BAT\n")
 				gilesInsert(ses.UuidMap["wall_in_remote_time"], fmt.Sprintf("/%04x/wall_in_remote_time", serial), "Wall seconds", ses.GetTime(), float64(time.Now().UnixNano()/1000000)/1000.)
