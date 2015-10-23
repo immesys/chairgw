@@ -24,7 +24,7 @@ var giles = "http://127.0.0.1:8079/api/query"
 var gilesi = "http://127.0.0.1:8079/add/nokey"
 var seslock sync.Mutex
 var sessions map[uint16]*Session
-var streams []string = []string{"humidity", "temperature", "occupancy", "seat_fan", "seat_heat", "back_fan", "back_heat", "battery", "wall_in_remote_time", "remote_in_wall_time"}
+var streams []string = []string{"humidity", "temperature", "occupancy", "offset", "seat_fan", "seat_heat", "back_fan", "back_heat", "battery", "wall_in_remote_time", "remote_in_wall_time"}
 var sock *net.UDPConn
 var socklock sync.Mutex
 
@@ -99,6 +99,8 @@ func createSession(serial uint16) *Session {
 			time.Sleep(100 * time.Millisecond)
 			if rv.HaveTime {
 				gilesInsert(rv.UuidMap["remote_in_wall_time"], fmt.Sprintf("/%04x/remote_in_wall_time", serial), "Remote seconds", uint64(time.Now().UnixNano()/1000000), float64(rv.GetTime()/1000))
+				offset := (float64(rv.GetTime()) - float64(time.Now().UnixNano()/1000)/1000) / 1000
+				gilesInsert(rv.UuidMap["offset"], fmt.Sprintf("/%04x/offset", serial), "Seconds", uint64(time.Now().UnixNano()/1000000), offset)
 			}
 		}
 	}()
