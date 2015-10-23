@@ -108,7 +108,7 @@ func createSession(serial uint16) *Session {
 }
 
 func (ses *Session) Process(serial uint16, ra *net.UDPAddr, msg []byte) {
-	var read_ptr = int(uint16(msg[0]) + (uint16(msg[1]) << 8))
+	var read_ptr = int(uint32(msg[0]) + (uint32(msg[1]) << 8) + (uint32(msg[2]) << 16))
 
 	fmt.Printf("Processed 0x%04x::%x\n", serial, read_ptr)
 
