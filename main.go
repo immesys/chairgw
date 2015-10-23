@@ -185,9 +185,9 @@ func (ses *Session) Process(serial uint16, ra *net.UDPAddr, msg []byte) {
 					continue
 				}
 				rts := uint32(r[0] >> 4 & 3)
-				seat_heat := (r[0] << 3) + (r[1] >> 5)
-				back_heat := (r[1] & 0x1f) + (r[2] >> 6)
-				seat_fan := (r[2] << 1 & 0x3f) + r[3]>>7
+				seat_heat := ((r[0] & 0xf) << 3) + (r[1] >> 5)
+				back_heat := ((r[1] & 0x1f) << 2) + (r[2] >> 6)
+				seat_fan := ((r[2] & 0x3f) << 1) + r[3]>>7
 				back_fan := r[3] & 0x7f
 				ses.CurrentTime += rts
 				fmt.Printf(">>> Got SET rts was %d\n", rts)
