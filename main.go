@@ -172,6 +172,7 @@ func (ses *Session) Process(serial uint16, ra *net.UDPAddr, msg []byte) {
 					fmt.Println("Bad humidity record")
 				}
 				if tmp != 0 {
+					fmt.Printf("Got raw temp record: %x\n", tmp)
 					real_tmp := (-46.85+175.72*float64(tmp<<2)/65536)*1.8 + 32
 					//fmt.Printf("Inserting temperature value %f\n", real_tmp)
 					gilesInsert(ses.UuidMap["temperature"], fmt.Sprintf("/%04x/temperature", serial), "Fahrenheit", ses.GetTime(), real_tmp)
