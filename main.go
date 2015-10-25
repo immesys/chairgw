@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"code.google.com/p/go-uuid/uuid"
+	_ "github.com/go-sql-driver/mysql"
 )
 
 type Session struct {
@@ -24,7 +26,7 @@ var giles = "http://127.0.0.1:8079/api/query"
 var gilesi = "http://127.0.0.1:8079/add/nokey"
 var seslock sync.Mutex
 var sessions map[uint16]*Session
-var streams []string = []string{"humidity", "temperature", "occupancy", "offset", "seat_fan", "seat_heat", "back_fan", "back_heat", "battery", "wall_in_remote_time", "remote_in_wall_time"}
+var streams []string = []string{"humidity", "temperature", "occupancy", "resets", "fw_version", "offset", "seat_fan", "seat_heat", "back_fan", "back_heat", "battery", "wall_in_remote_time", "remote_in_wall_time"}
 var sock *net.UDPConn
 var socklock sync.Mutex
 
@@ -211,14 +213,40 @@ func (ses *Session) Process(serial uint16, ra *net.UDPAddr, msg []byte) {
 				fmt.Printf(">>> Got BAT\n")
 				gilesInsert(ses.UuidMap["wall_in_remote_time"], fmt.Sprintf("/%04x/wall_in_remote_time", serial), "Wall seconds", ses.GetTime(), float64(time.Now().UnixNano()/1000000)/1000.)
 				gilesInsert(ses.UuidMap["battery"], fmt.Sprintf("/%04x/battery", serial), "Voltage", ses.GetTime(), volf)
-
+			case (typ & 0xf0) == 0xd0:
+				ver := uint8(r[0] & 0xf)
+				rsts := uint8(r[1] >> 2)
+				religion := (uint32(r[1]&3) << 16) + uint32(r[2])<<8 + uint32(r[3])
+				religionS := fmt.Sprintf("0x%x", religion+0x50000)
+				serialS := fmt.Sprintf("0x%04x", serial)
+				var nodetime time.Time
+				if ses.HaveTime {
+					nodetime = time.Unix(0, int64(ses.GetTime())*1000000)
+				} else {
+					nodetime = time.Unix(0, 0)
+				}
+				stmt, err := db.Prepare("INSERT INTO bootrecords SET serial=?, resets=?, religion=?, version=?, nodetime=?")
+				if err != nil {
+					panic(err)
+				}
+				_, err = stmt.Exec(serialS, rsts, religionS, ver, nodetime)
+				if err != nil {
+					panic(err)
+				}
+				if !ses.HaveTime {
+					fmt.Printf("Dropping boot record: no time\n")
+					continue
+				}
+				gilesInsert(ses.UuidMap["wall_in_remote_time"], fmt.Sprintf("/%04x/wall_in_remote_time", serial), "Wall seconds", ses.GetTime(), float64(time.Now().UnixNano()/1000000)/1000.)
+				gilesInsert(ses.UuidMap["resets"], fmt.Sprintf("/%04x/resets", serial), "Resets", ses.GetTime(), float64(rsts))
+				gilesInsert(ses.UuidMap["version"], fmt.Sprintf("/%04x/version", serial), "Version", ses.GetTime(), float64(ver))
 			default:
 				fmt.Printf("WHAT KIND OF RECORD IS THIS?? %x %x %x %x\n", r[0], r[1], r[2], r[3])
 			}
 		}
 	}
 	socklock.Lock()
-        fmt.Printf("Releasing %d / %x\n", read_ptr, read_ptr)
+	fmt.Printf("Releasing %d / %x\n", read_ptr, read_ptr)
 	_, err := sock.WriteToUDP([]byte{uint8(read_ptr), uint8(read_ptr >> 8), uint8(read_ptr >> 16)}, ra)
 	if err != nil {
 		panic(err)
@@ -241,7 +269,15 @@ func handlePacket(ra *net.UDPAddr, msg []byte) {
 
 	 */
 }
+
+var db *sql.DB
+
 func main() {
+	var err error
+	db, err = sql.Open("mysql", "<fillmein>@/pecs")
+	if err != nil {
+		panic(err)
+	}
 	sessions = make(map[uint16]*Session)
 	addr, err := net.ResolveUDPAddr("udp6", ":4040")
 	if err != nil {
