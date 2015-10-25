@@ -136,7 +136,7 @@ func (ses *Session) Process(serial uint16, ra *net.UDPAddr, msg []byte) {
 	}
 	if process {
 		for i := 0; i < 16; i++ {
-			r := msg[2+i*4 : 2+(i+1)*4]
+			r := msg[3+i*4 : 3+(i+1)*4]
 			typ := r[0]
 			switch {
 			case (typ & 0xf0) == 0xf0: //BLANK
@@ -218,6 +218,7 @@ func (ses *Session) Process(serial uint16, ra *net.UDPAddr, msg []byte) {
 		}
 	}
 	socklock.Lock()
+        fmt.Printf("Releasing %d / %x\n", read_ptr, read_ptr)
 	_, err := sock.WriteToUDP([]byte{uint8(read_ptr), uint8(read_ptr >> 8), uint8(read_ptr >> 16)}, ra)
 	if err != nil {
 		panic(err)
