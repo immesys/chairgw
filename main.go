@@ -233,13 +233,14 @@ func (ses *Session) Process(serial uint16, ra *net.UDPAddr, msg []byte) {
 				if err != nil {
 					panic(err)
 				}
+				fmt.Printf(">>> Got BOOT\n")
 				if !ses.HaveTime {
 					fmt.Printf("Dropping boot record: no time\n")
 					continue
 				}
 				gilesInsert(ses.UuidMap["wall_in_remote_time"], fmt.Sprintf("/%04x/wall_in_remote_time", serial), "Wall seconds", ses.GetTime(), float64(time.Now().UnixNano()/1000000)/1000.)
 				gilesInsert(ses.UuidMap["resets"], fmt.Sprintf("/%04x/resets", serial), "Resets", ses.GetTime(), float64(rsts))
-				gilesInsert(ses.UuidMap["version"], fmt.Sprintf("/%04x/version", serial), "Version", ses.GetTime(), float64(ver))
+				gilesInsert(ses.UuidMap["fw_version"], fmt.Sprintf("/%04x/fw_version", serial), "Version", ses.GetTime(), float64(ver))
 			default:
 				fmt.Printf("WHAT KIND OF RECORD IS THIS?? %x %x %x %x\n", r[0], r[1], r[2], r[3])
 			}
