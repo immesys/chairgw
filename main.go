@@ -18,6 +18,7 @@ import (
 type Session struct {
 	CurrentTime uint32
 	HaveTime    bool
+        HaveInitialTime bool
 	UuidMap     map[string]string
 	ReadPtr     int
 }
@@ -72,7 +73,7 @@ func (ses *Session) GetTime() uint64 {
 	return (uint64(ses.CurrentTime) + 1420070400) * 1000
 }
 func createSession(serial uint16) *Session {
-	rv := &Session{HaveTime: false, ReadPtr: -1, UuidMap: make(map[string]string)}
+	rv := &Session{HaveTime: false, HaveInitialTime:false, ReadPtr: -1, UuidMap: make(map[string]string)}
 	for _, e := range streams {
 		qry := fmt.Sprintf("select uuid where Path like '/%04x/%s'", serial, e)
 		resp, err := http.Post(giles, "text/plain", strings.NewReader(qry))
@@ -99,7 +100,7 @@ func createSession(serial uint16) *Session {
 	go func() {
 		for {
 			time.Sleep(100 * time.Millisecond)
-			if rv.HaveTime {
+			if rv.HaveInitialTime {
 				gilesInsert(rv.UuidMap["remote_in_wall_time"], fmt.Sprintf("/%04x/remote_in_wall_time", serial), "Remote seconds", uint64(time.Now().UnixNano()/1000000), float64(rv.GetTime()/1000))
 				offset := (float64(rv.GetTime()) - float64(time.Now().UnixNano()/1000)/1000) / 1000
 				gilesInsert(rv.UuidMap["offset"], fmt.Sprintf("/%04x/offset", serial), "Seconds", uint64(time.Now().UnixNano()/1000000), offset)
@@ -148,6 +149,7 @@ func (ses *Session) Process(serial uint16, ra *net.UDPAddr, msg []byte) {
 				ts := (uint32(r[0]) & 0xf << 24) | (uint32(r[1]) << 16) | (uint32(r[2]) << 8) | uint32(r[3])
 				ses.CurrentTime = ts
 				ses.HaveTime = true
+				ses.HaveInitialTime = true
 				fmt.Printf(">>> Got ABS TS\n")
 				gilesInsert(ses.UuidMap["wall_in_remote_time"], fmt.Sprintf("/%04x/wall_in_remote_time", serial), "Wall seconds", ses.GetTime(), float64(time.Now().UnixNano()/1000000)/1000.)
 			case (typ & 0xc0) == 0: //Temp/Hum/Occ
