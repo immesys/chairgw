@@ -4,7 +4,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"runtime"
+        "io/ioutil"
 	"net"
 	"net/http"
 	"strings"
@@ -27,7 +28,7 @@ var giles = "http://127.0.0.1:8079/api/query"
 var gilesi = "http://127.0.0.1:8079/add/nokey"
 var seslock sync.Mutex
 var sessions map[uint16]*Session
-var streams []string = []string{"humidity", "temperature", "occupancy", "resets", "fw_version", "offset", "seat_fan", "seat_heat", "back_fan", "back_heat", "battery", "wall_in_remote_time", "remote_in_wall_time"}
+var streams []string = []string{"humidity", "temperature", "occupancy", "resets", "log_ptr", "fw_version", "offset", "seat_fan", "seat_heat", "back_fan", "back_heat", "battery", "wall_in_remote_time", "remote_in_wall_time"}
 var sock *net.UDPConn
 var socklock sync.Mutex
 
@@ -72,6 +73,9 @@ func (ses *Session) GetTime() uint64 {
 	//fmt.Printf("Remote time: %v\n", time.Unix(int64(s), 0))
 	return (uint64(ses.CurrentTime) + 1420070400) * 1000
 }
+func GetWallTime() uint64 {
+	return uint64(time.Now().UnixNano()/1000000)
+}
 func createSession(serial uint16) *Session {
 	rv := &Session{HaveTime: false, HaveInitialTime:false, ReadPtr: -1, UuidMap: make(map[string]string)}
 	for _, e := range streams {
@@ -114,7 +118,7 @@ func (ses *Session) Process(serial uint16, ra *net.UDPAddr, msg []byte) {
 	var read_ptr = int(uint32(msg[0]) + (uint32(msg[1]) << 8) + (uint32(msg[2]) << 16))
 
 	fmt.Printf("Processed 0x%04x::%x\n", serial, read_ptr)
-
+	gilesInsert(ses.UuidMap["log_ptr"], fmt.Sprintf("/%04x/log_ptr", serial), "Record index", GetWallTime(), float64(read_ptr))
 	process := false
 
 	if ses.ReadPtr == -1 {
@@ -293,6 +297,7 @@ func main() {
 	for {
 		buf := make([]byte, 2048)
 		ln, addr, err := sock.ReadFromUDP(buf)
+		fmt.Printf("Got packet ADDR %+v\n", addr)
 		if err != nil {
 			fmt.Printf("Got error: %v\n", err)
 			continue
