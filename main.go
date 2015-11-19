@@ -150,6 +150,7 @@ func (ses *Session) Process(serial uint16, ra *net.UDPAddr, msg []byte) {
 			switch {
 			case (typ & 0xf0) == 0xf0: //BLANK
 				fmt.Printf("Skipping blank record: %x %x %x %x\n", r[0], r[1], r[2], r[3])
+				ses.CorruptRecords += 1
 				continue
 			case (typ & 0xf0) == 0xe0: //TIMESTAMP
 				ts := (uint32(r[0]) & 0xf << 24) | (uint32(r[1]) << 16) | (uint32(r[2]) << 8) | uint32(r[3])
@@ -257,6 +258,7 @@ func (ses *Session) Process(serial uint16, ra *net.UDPAddr, msg []byte) {
 				gilesInsert(ses.UuidMap["fw_version"], fmt.Sprintf("/%04x/fw_version", serial), "Version", ses.GetTime(), float64(ver))
 			default:
 				fmt.Printf("WHAT KIND OF RECORD IS THIS?? %x %x %x %x\n", r[0], r[1], r[2], r[3])
+				ses.CorruptRecords += 1
 			}
 		}
 	}
