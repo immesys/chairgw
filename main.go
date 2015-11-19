@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -16,17 +17,18 @@ import (
 )
 
 type Session struct {
-	CurrentTime uint32
-	HaveTime    bool
-	UuidMap     map[string]string
-	ReadPtr     int
+	CurrentTime     uint32
+	HaveTime        bool
+	HaveInitialTime bool
+	UuidMap         map[string]string
+	ReadPtr         int
 }
 
 var giles = "http://127.0.0.1:8079/api/query"
 var gilesi = "http://127.0.0.1:8079/add/nokey"
 var seslock sync.Mutex
 var sessions map[uint16]*Session
-var streams []string = []string{"humidity", "temperature", "occupancy", "resets", "battery_ok", "fw_version", "offset", "seat_fan", "seat_heat", "back_fan", "back_heat", "battery", "wall_in_remote_time", "remote_in_wall_time"}
+var streams []string = []string{"humidity", "temperature", "occupancy", "resets", "log_ptr", "battery_ok", "fw_version", "offset", "seat_fan", "seat_heat", "back_fan", "back_heat", "battery", "wall_in_remote_time", "remote_in_wall_time"}
 var sock *net.UDPConn
 var socklock sync.Mutex
 
@@ -71,8 +73,11 @@ func (ses *Session) GetTime() uint64 {
 	//fmt.Printf("Remote time: %v\n", time.Unix(int64(s), 0))
 	return (uint64(ses.CurrentTime) + 1420070400) * 1000
 }
+func GetWallTime() uint64 {
+	return uint64(time.Now().UnixNano() / 1000000)
+}
 func createSession(serial uint16) *Session {
-	rv := &Session{HaveTime: false, ReadPtr: -1, UuidMap: make(map[string]string)}
+	rv := &Session{HaveTime: false, HaveInitialTime: false, ReadPtr: -1, UuidMap: make(map[string]string)}
 	for _, e := range streams {
 		qry := fmt.Sprintf("select uuid where Path like '/%04x/%s'", serial, e)
 		resp, err := http.Post(giles, "text/plain", strings.NewReader(qry))
@@ -99,7 +104,7 @@ func createSession(serial uint16) *Session {
 	go func() {
 		for {
 			time.Sleep(100 * time.Millisecond)
-			if rv.HaveTime {
+			if rv.HaveInitialTime {
 				gilesInsert(rv.UuidMap["remote_in_wall_time"], fmt.Sprintf("/%04x/remote_in_wall_time", serial), "Remote seconds", uint64(time.Now().UnixNano()/1000000), float64(rv.GetTime()/1000))
 				offset := (float64(rv.GetTime()) - float64(time.Now().UnixNano()/1000)/1000) / 1000
 				gilesInsert(rv.UuidMap["offset"], fmt.Sprintf("/%04x/offset", serial), "Seconds", uint64(time.Now().UnixNano()/1000000), offset)
@@ -113,7 +118,7 @@ func (ses *Session) Process(serial uint16, ra *net.UDPAddr, msg []byte) {
 	var read_ptr = int(uint32(msg[0]) + (uint32(msg[1]) << 8) + (uint32(msg[2]) << 16))
 
 	fmt.Printf("Processed 0x%04x::%x\n", serial, read_ptr)
-
+	gilesInsert(ses.UuidMap["log_ptr"], fmt.Sprintf("/%04x/log_ptr", serial), "Record index", GetWallTime(), float64(read_ptr))
 	process := false
 
 	if ses.ReadPtr == -1 {
@@ -148,6 +153,7 @@ func (ses *Session) Process(serial uint16, ra *net.UDPAddr, msg []byte) {
 				ts := (uint32(r[0]) & 0xf << 24) | (uint32(r[1]) << 16) | (uint32(r[2]) << 8) | uint32(r[3])
 				ses.CurrentTime = ts
 				ses.HaveTime = true
+				ses.HaveInitialTime = true
 				fmt.Printf(">>> Got ABS TS\n")
 				gilesInsert(ses.UuidMap["wall_in_remote_time"], fmt.Sprintf("/%04x/wall_in_remote_time", serial), "Wall seconds", ses.GetTime(), float64(time.Now().UnixNano()/1000000)/1000.)
 			case (typ & 0xc0) == 0: //Temp/Hum/Occ
@@ -285,6 +291,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	runtime.GOMAXPROCS(16)
 	sessions = make(map[uint16]*Session)
 	addr, err := net.ResolveUDPAddr("udp6", ":4040")
 	if err != nil {
@@ -297,6 +304,7 @@ func main() {
 	for {
 		buf := make([]byte, 2048)
 		ln, addr, err := sock.ReadFromUDP(buf)
+		fmt.Printf("Got packet ADDR %+v\n", addr)
 		if err != nil {
 			fmt.Printf("Got error: %v\n", err)
 			continue
