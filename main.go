@@ -22,13 +22,14 @@ type Session struct {
 	HaveInitialTime bool
 	UuidMap         map[string]string
 	ReadPtr         int
+	CorruptRecords  int
 }
 
 var giles = "http://127.0.0.1:8079/api/query"
 var gilesi = "http://127.0.0.1:8079/add/nokey"
 var seslock sync.Mutex
 var sessions map[uint16]*Session
-var streams []string = []string{"humidity", "temperature", "occupancy", "resets", "log_ptr", "battery_ok", "fw_version", "offset", "seat_fan", "seat_heat", "back_fan", "back_heat", "battery", "wall_in_remote_time", "remote_in_wall_time"}
+var streams []string = []string{"humidity", "temperature", "occupancy", "session_corrupt_records", "resets", "log_ptr", "battery_ok", "fw_version", "offset", "seat_fan", "seat_heat", "back_fan", "back_heat", "battery", "wall_in_remote_time", "remote_in_wall_time"}
 var sock *net.UDPConn
 var socklock sync.Mutex
 
@@ -109,6 +110,7 @@ func createSession(serial uint16) *Session {
 				offset := (float64(rv.GetTime()) - float64(time.Now().UnixNano()/1000)/1000) / 1000
 				gilesInsert(rv.UuidMap["offset"], fmt.Sprintf("/%04x/offset", serial), "Seconds", uint64(time.Now().UnixNano()/1000000), offset)
 			}
+			gilesInsert(rv.UuidMap["session_corrupt_records"], fmt.Sprintf("/%04x/session_corrupt_records", serial), "Corrupt Records", uint64(time.Now().UnixNano()/1000000), float64(rv.CorruptRecords))
 		}
 	}()
 	return rv
@@ -224,7 +226,7 @@ func (ses *Session) Process(serial uint16, ra *net.UDPAddr, msg []byte) {
 				fmt.Printf(">>> Got BAT\n")
 				gilesInsert(ses.UuidMap["wall_in_remote_time"], fmt.Sprintf("/%04x/wall_in_remote_time", serial), "Wall seconds", ses.GetTime(), float64(time.Now().UnixNano()/1000000)/1000.)
 				gilesInsert(ses.UuidMap["battery"], fmt.Sprintf("/%04x/battery", serial), "Voltage", ses.GetTime(), volf)
-				gilesInsert(ses.UuidMap["battery_ok"], fmt.Sprintf("/%04x/battery_ok", serial), "Voltage", ses.GetTime(), bat_okd)
+				gilesInsert(ses.UuidMap["battery_ok"], fmt.Sprintf("/%04x/battery_ok", serial), "Boolean", ses.GetTime(), bat_okd)
 			case (typ & 0xf0) == 0xd0:
 				ver := uint8(r[0] & 0xf)
 				rsts := uint8(r[1] >> 2)
