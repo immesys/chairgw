@@ -264,7 +264,10 @@ func (ses *Session) Process(serial uint16, ra *net.UDPAddr, msg []byte) {
 	}
 	socklock.Lock()
 	fmt.Printf("Releasing %d / %x\n", read_ptr, read_ptr)
-	_, err := sock.WriteToUDP([]byte{uint8(read_ptr), uint8(read_ptr >> 8), uint8(read_ptr >> 16)}, ra)
+	ts := time.Now().Unix()
+	pkt := []byte{uint8(read_ptr), uint8(read_ptr >> 8), uint8(read_ptr >> 16),
+		uint8(ts), uint8(ts >> 8), uint8(ts >> 16), uint8(ts >> 24)}
+	_, err := sock.WriteToUDP(pkt, ra)
 	if err != nil {
 		panic(err)
 	}
