@@ -26,7 +26,7 @@ var giles = "http://127.0.0.1:8079/api/query"
 var gilesi = "http://127.0.0.1:8079/add/nokey"
 var seslock sync.Mutex
 var sessions map[uint16]*Session
-var streams []string = []string{"humidity", "temperature", "occupancy", "resets", "fw_version", "offset", "seat_fan", "seat_heat", "back_fan", "back_heat", "battery", "wall_in_remote_time", "remote_in_wall_time"}
+var streams []string = []string{"humidity", "temperature", "occupancy", "resets", "battery_ok", "fw_version", "offset", "seat_fan", "seat_heat", "back_fan", "back_heat", "battery", "wall_in_remote_time", "remote_in_wall_time"}
 var sock *net.UDPConn
 var socklock sync.Mutex
 
@@ -205,7 +205,12 @@ func (ses *Session) Process(serial uint16, ra *net.UDPAddr, msg []byte) {
 					fmt.Printf("Dropping BAT record, no absolute time\n")
 					continue
 				}
-				rts := uint32(r[0]&0xf)<<8 + uint32(r[1])
+				bat_ok := (r[0] & 8) != 0
+				bat_okd := 1.0
+				if !bat_ok {
+					bat_okd = 0.0
+				}
+				rts := uint32(r[0]&0x7)<<8 + uint32(r[1])
 				vol := int16(uint16(r[2])<<8 + uint16(r[3]))
 
 				volf := (float64(vol) / 32768 * 2.048) / (10000. / (10000. + 68000.))
@@ -213,6 +218,7 @@ func (ses *Session) Process(serial uint16, ra *net.UDPAddr, msg []byte) {
 				fmt.Printf(">>> Got BAT\n")
 				gilesInsert(ses.UuidMap["wall_in_remote_time"], fmt.Sprintf("/%04x/wall_in_remote_time", serial), "Wall seconds", ses.GetTime(), float64(time.Now().UnixNano()/1000000)/1000.)
 				gilesInsert(ses.UuidMap["battery"], fmt.Sprintf("/%04x/battery", serial), "Voltage", ses.GetTime(), volf)
+				gilesInsert(ses.UuidMap["battery_ok"], fmt.Sprintf("/%04x/battery_ok", serial), "Voltage", ses.GetTime(), bat_okd)
 			case (typ & 0xf0) == 0xd0:
 				ver := uint8(r[0] & 0xf)
 				rsts := uint8(r[1] >> 2)
